@@ -11,25 +11,25 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential flex libssl-dev libelf-dev libncurses-dev git python3 libkmod-dev lz4 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu crossbuild-essential-arm64 wget tar
+          sudo apt-get install -y bc bison build-essential flex libssl-dev libelf-dev libncurses-dev git python3 libkmod-dev lz4 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu crossbuild-essential-arm64
 
       - name: Checkout Kernel Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Pinned Android Clang Toolchain (r488900)
+      - name: Setup Clang Toolchain via Git Clone
         run: |
           mkdir -p $GITHUB_WORKSPACE/toolchain
-          cd $GITHUB_WORKSPACE/toolchain
-          # Download Google's pinned Android 16 LLVM binary package
-          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r488900.tar.gz
-          mkdir -p clang-r488900
-          tar -xzf clang-r488900.tar.gz -C clang-r488900
+          git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 $GITHUB_WORKSPACE/toolchain/clang-repo
 
       - name: Compile Kernel Image
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
-          export PATH=$GITHUB_WORKSPACE/toolchain/clang-r488900/bin:$PATH
+          
+          # Automatically find the installed clang binary path inside the prebuilts repository
+          CLANG_DIR=$(find $GITHUB_WORKSPACE/toolchain/clang-repo -name "clang" -type f | head -n 1 | xargs dirname)
+          export PATH=$CLANG_DIR:$PATH
+          
           export CROSS_COMPILE=aarch64-linux-gnu-
           export LLVM=1
           export LLVM_IAS=1
@@ -37,7 +37,7 @@ jobs:
           # Build GKI configuration
           make O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 gki_defconfig
 
-          # Compile Image.lz4 binary
+          # Compile Image.lz4 binary with fallback to Image
           make -j$(nproc) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 Image.lz4 || make -j$(nproc) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 Image
 
       - name: Upload Kernel Artifact
