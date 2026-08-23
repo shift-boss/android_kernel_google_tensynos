@@ -11,36 +11,34 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential flex libssl-dev libelf-dev libncurses-dev git python3 libkmod-dev lz4 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu crossbuild-essential-arm64
+          sudo apt-get install -y bc bison build-essential flex libssl-dev libelf-dev libncurses-dev git python3 libkmod-dev lz4 gcc-aarch64-linux-gnu g++-aarch64-linux-gnu crossbuild-essential-arm64 wget tar
 
       - name: Checkout Kernel Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Clang Toolchain
+      - name: Setup Pinned Android Clang Toolchain (r488900)
         run: |
           mkdir -p $GITHUB_WORKSPACE/toolchain
           cd $GITHUB_WORKSPACE/toolchain
-          git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 -b master clang
+          # Download Google's pinned Android 16 LLVM binary package
+          wget -q https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r488900.tar.gz
+          mkdir -p clang-r488900
+          tar -xzf clang-r488900.tar.gz -C clang-r488900
 
       - name: Compile Kernel Image
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          # Dynamic PATH setup for Clang
-          CLANG_BIN=$(find $GITHUB_WORKSPACE/toolchain/clang -name "clang" -type f | head -n 1 | xargs dirname)
-          export PATH=$CLANG_BIN:$PATH
-          
-          # Tell make to use llvm-ar, llvm-nm, etc., and aarch64-linux-gnu- for CROSS_COMPILE
+          export PATH=$GITHUB_WORKSPACE/toolchain/clang-r488900/bin:$PATH
           export CROSS_COMPILE=aarch64-linux-gnu-
           export LLVM=1
           export LLVM_IAS=1
 
-          # 1. Build defconfig with full LLVM environment overrides
-          make O=out ARCH=arm64 CC=clang REAL_CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 gki_defconfig
+          # Build GKI configuration
+          make O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 gki_defconfig
 
-          # 2. Compile kernel
-          make -j$(nproc) O=out ARCH=arm64 CC=clang REAL_CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 Image.lz4 || make -j$(nproc) O=out ARCH=arm64 CC=clang REAL_CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 Image
+          # Compile Image.lz4 binary
+          make -j$(nproc) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 Image.lz4 || make -j$(nproc) O=out ARCH=arm64 CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 Image
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
