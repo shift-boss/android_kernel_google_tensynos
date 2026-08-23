@@ -1,0 +1,42 @@
+name: Build Sultan Tensor GKI Kernel
+
+on:
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions UI
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential flex libssl-dev libelf-dev libncurses-dev git python3
+
+      - name: Checkout Kernel Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Clang Toolchain
+        run: |
+          mkdir -p $GITHUB_WORKSPACE/toolchain
+          cd $GITHUB_WORKSPACE/toolchain
+          git clone https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 --depth=1 -b master clang
+
+      - name: Compile Kernel Image (Image.lz4)
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CC=clang
+          export PATH=$GITHUB_WORKSPACE/toolchain/clang/clang-r488900/bin:$PATH
+
+          # Build GKI defconfig
+          make O=out ARCH=arm64 gki_defconfig
+
+          # Compile Image.lz4 binary
+          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 Image.lz4
+
+      - name: Upload Kernel Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sultan-Pixel8Pro-Kernel
+          path: ${{ github.workspace }}/out/arch/arm64/boot/Image.lz4
