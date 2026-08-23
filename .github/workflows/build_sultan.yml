@@ -26,17 +26,21 @@ jobs:
         run: |
           export ARCH=arm64
           export SUBARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Locate dynamic clang path from Google toolchain repo
+          # Dynamic PATH setup for Clang
           CLANG_BIN=$(find $GITHUB_WORKSPACE/toolchain/clang -name "clang" -type f | head -n 1 | xargs dirname)
           export PATH=$CLANG_BIN:$PATH
+          
+          # Tell make to use llvm-ar, llvm-nm, etc., and aarch64-linux-gnu- for CROSS_COMPILE
+          export CROSS_COMPILE=aarch64-linux-gnu-
+          export LLVM=1
+          export LLVM_IAS=1
 
-          # Build GKI configuration
-          make O=out ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE=aarch64-linux-gnu- gki_defconfig
+          # 1. Build defconfig with full LLVM environment overrides
+          make O=out ARCH=arm64 CC=clang REAL_CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 gki_defconfig
 
-          # Compile Kernel Image (Image.lz4 or Image fallback)
-          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-gnu- Image.lz4 || make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 CROSS_COMPILE=aarch64-linux-gnu- Image
+          # 2. Compile kernel
+          make -j$(nproc) O=out ARCH=arm64 CC=clang REAL_CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 LLVM_IAS=1 Image.lz4 || make -j$(nproc) O=out ARCH=arm64 CC=clang REAL_CC=clang CROSS_COMPILE=aarch64-linux-gnu- LLVM=1 Image
 
       - name: Upload Kernel Artifact
         uses: actions/upload-artifact@v4
