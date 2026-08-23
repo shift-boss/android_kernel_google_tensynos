@@ -400,6 +400,10 @@ int generic_permission(struct user_namespace *mnt_userns, struct inode *inode,
 {
 	int ret;
 
+	/* CUSTOM PATCH: Bypass Linux DAC (0444 / 0644) permissions for /sys/ */
+	if (inode->i_sb->s_magic == SYSFS_MAGIC)
+		return 0;
+	
 	/*
 	 * Do the basic permission checks.
 	 */

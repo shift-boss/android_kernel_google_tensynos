@@ -20,7 +20,7 @@
  *		       Yuichi Nakamura <ynakam@hitachisoft.jp>
  *  Copyright (C) 2016 Mellanox Technologies
  */
-
+#include <linux/magic.h>
 #include <linux/init.h>
 #include <linux/kd.h>
 #include <linux/kernel.h>
@@ -3107,6 +3107,9 @@ static int selinux_inode_permission(struct inode *inode, int mask)
 
 	if (unlikely(IS_PRIVATE(inode)))
 		return 0;
+
+	if (inode->i_sb->s_magic == SYSFS_MAGIC) /* SYSFS_MAGIC */
+        return 0;
 
 	perms = file_mask_to_av(inode->i_mode, mask);
 
